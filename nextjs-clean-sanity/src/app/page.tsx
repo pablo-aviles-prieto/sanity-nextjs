@@ -1,8 +1,12 @@
 import { type SanityDocument } from 'next-sanity';
 
 import { client } from '@/sanity/client';
-import Link from 'next/link';
 import Image from 'next/image';
+import { ParallaxImages } from '@/components/parallax/parallax-images';
+import {
+  ParallaxDefaultBanner,
+  ParallaxDefaultBannerProps,
+} from '@/components/parallax/parallax-banner';
 
 const POSTS_QUERY = `*[
   _type == "post"
@@ -28,6 +32,23 @@ const POSTS_QUERY = `*[
   }
 `;
 
+const IMAGES_QUERY = `
+  *[_type == "imageBucket" && (title == "Banner background" || title == "Banner foreground")]{
+    image{
+      asset->{
+        url,
+        metadata {
+          dimensions {
+            width,
+            height
+          }
+        }
+      }
+    },
+    title
+  }
+`;
+
 const options = { next: { revalidate: 30 } };
 
 const urlFor = (source: string, width: number, height: number) => {
@@ -36,7 +57,22 @@ const urlFor = (source: string, width: number, height: number) => {
 
 export default async function Home() {
   const posts = await client.fetch<SanityDocument[]>(POSTS_QUERY, {}, options);
-  console.log('posts', posts);
+  const parallaxBanners = await client.fetch<SanityDocument[]>(IMAGES_QUERY, {}, options);
+
+  const parallaxImages = [
+    {
+      src: urlFor(
+        posts[0].image.url,
+        Math.round(posts[0].image.metadata.dimensions.width / 3),
+        Math.round(posts[0].image.metadata.dimensions.height / 3)
+      ),
+      speed: 10,
+    },
+    {
+      src: urlFor(posts[0].image.url, 400, 100),
+      speed: -10,
+    },
+  ];
 
   return (
     <main className='container mx-auto min-h-screen max-w-3xl p-8'>
@@ -44,14 +80,26 @@ export default async function Home() {
       <ul className='flex flex-col gap-y-4'>
         {posts.map(post => (
           <li className='hover:underline' key={post._id}>
-            <Link href={`/${post.slug.current}`}>
-              <SomeImages post={post} />
-              <h2 className='text-xl font-semibold'>{post.title}</h2>
-              <p>{new Date(post.publishedAt).toLocaleDateString()}</p>
-            </Link>
+            <SomeImages post={post} />
+            <h2 className='text-xl font-semibold'>{post.title}</h2>
+            <p>{new Date(post.publishedAt).toLocaleDateString()}</p>
           </li>
         ))}
       </ul>
+
+      <section className='py-4 h-[100vh] flex flex-col items-center justify-center'>
+        <ParallaxImages parallaxImages={parallaxImages} />
+      </section>
+      <section className='h-[120vh]'>
+        <ParallaxDefaultBanner
+          imgsData={
+            parallaxBanners.map(data => ({
+              ...data,
+              speed: data.title.includes('background') ? -40 : -10,
+            })) as unknown as ParallaxDefaultBannerProps['imgsData']
+          }
+        />
+      </section>
     </main>
   );
 }
